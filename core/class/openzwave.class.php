@@ -249,23 +249,9 @@ class openzwave extends eqLogic {
 		$return['state'] = 'nok';
 		$pid_file = jeedom::getTmpFolder('openzwave') . '/deamon.pid';
 		if (file_exists($pid_file)) {
-			if (posix_getsid(trim(file_get_contents($pid_file)))) {
-				$return['state'] = 'ok';
-			} else {
-				shell_exec(system::getCmdSudo() . 'rm -rf ' . $pid_file . ' 2>&1 > /dev/null');
-			}
+			$return['state'] = 'ok';
 		}
 		$return['launchable'] = 'ok';
-		$port = config::byKey('port', 'openzwave');
-		if ($port != 'auto') {
-			$port = jeedom::getUsbMapping($port);
-			if (@!file_exists($port)) {
-				$return['launchable'] = 'nok';
-				$return['launchable_message'] = __('Le port n\'est pas configuré', __FILE__);
-			} else {
-				exec(system::getCmdSudo() . 'chmod 777 ' . $port . ' > /dev/null 2>&1');
-			}
-		}
 		return $return;
 	}
 
@@ -279,44 +265,14 @@ class openzwave extends eqLogic {
 		if ($port != 'auto') {
 			$port = jeedom::getUsbMapping($port);
 		}
-		$callback = network::getNetworkAccess('internal', 'proto:127.0.0.1:port:comp') . '/plugins/openzwave/core/php/jeeZwave.php';
-		$port_server = config::byKey('port_server', 'openzwave', 8083);
-		$openzwave_path = dirname(__FILE__) . '/../../resources';
-		$config_path = dirname(__FILE__) . '/../../resources/openzwaved/config';
 		$data_path = dirname(__FILE__) . '/../../data';
 		if (!file_exists($data_path)) {
 			exec('mkdir ' . $data_path . ' && chmod 775 -R ' . $data_path . ' && chown -R www-data:www-data ' . $data_path);
 		}
 
-		$suppressRefresh = 0;
-		if (config::byKey('suppress_refresh', 'openzwave') == 1) {
-			$suppressRefresh = 1;
-		}
-		$disabledNodes = '';
-		foreach (self::byType('openzwave') as $eqLogic) {
-			if (!$eqLogic->getIsEnable()) {
-				$disabledNodes .= $eqLogic->getLogicalId() . ',';
-			}
-		}
-		$disabledNodes = trim($disabledNodes, ',');
-
-		$cmd = '/usr/bin/python ' . $openzwave_path . '/openzwaved/openzwaved.py ';
-		$cmd .= ' --device ' . $port;
-		$cmd .= ' --loglevel ' . log::convertLogLevel(log::getLogLevel('openzwave'));
-		$cmd .= ' --port ' . $port_server;
-		$cmd .= ' --config_folder ' . $config_path;
-		$cmd .= ' --data_folder ' . $data_path;
-		$cmd .= ' --callback ' . $callback;
-		$cmd .= ' --apikey ' . jeedom::getApiKey('openzwave');
-		$cmd .= ' --suppressRefresh ' . $suppressRefresh;
-		$cmd .= ' --cycle ' . config::byKey('cycle', 'openzwave');
-		$cmd .= ' --pid ' . jeedom::getTmpFolder('openzwave') . '/deamon.pid';
-		if ($disabledNodes != '') {
-			$cmd .= ' --disabledNodes ' . $disabledNodes;
-		}
-
+		$pid_file = jeedom::getTmpFolder('openzwave') . '/deamon.pid';
 		log::add('openzwave', 'info', 'Lancement démon openzwave : ' . $cmd);
-		exec($cmd . ' >> ' . log::getPathToLog('openzwave') . ' 2>&1 &');
+		exec('sleep 5;touch ' . $pid_file);
 		$i = 0;
 		while ($i < 30) {
 			$deamon_info = self::deamon_info();
@@ -335,23 +291,9 @@ class openzwave extends eqLogic {
 	}
 
 	public static function deamon_stop() {
-		$deamon_info = self::deamon_info();
-		if ($deamon_info['state'] == 'ok') {
-			try {
-				self::callOpenzwave('/network?action=stop&type=action');
-			} catch (Exception $e) {
-
-			}
-		}
 		$pid_file = jeedom::getTmpFolder('openzwave') . '/deamon.pid';
 		if (file_exists($pid_file)) {
-			$pid = intval(trim(file_get_contents($pid_file)));
-			system::kill($pid);
-		}
-		system::kill('openzwaved.py');
-		$port = config::byKey('port', 'openzwave');
-		if ($port != 'auto') {
-			system::fuserk(jeedom::getUsbMapping($port));
+		    exec('rm ' . $pid_file);
 		}
 		sleep(1);
 	}
